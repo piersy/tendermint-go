@@ -1,3 +1,5 @@
+// Copyright (C) 2021 Clearmatics
+
 // Package algorithm implements the tendremint consensus protocol.
 //
 // This package only contains the core state transition logic for tendermint as
