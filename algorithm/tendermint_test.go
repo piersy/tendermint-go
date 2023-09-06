@@ -69,7 +69,6 @@ func TestStartRound(t *testing.T) {
 	cm, to = algo.StartRound(NilValue, round)
 	assert.Nil(t, cm)
 	assert.Equal(t, expectedTimeout, to)
-
 }
 
 func TestOnTimeoutPropose(t *testing.T) {
@@ -185,13 +184,45 @@ func TestReceiveMessageLine22(t *testing.T) {
 	assert.Nil(t, to)
 
 	expected := &ConsensusMessage{
-		MsgType:    Prevote,
-		Height:     height,
-		Round:      round,
-		Value:      newValueProposal.Value,
-		ValidRound: 0,
+		MsgType: Prevote,
+		Height:  height,
+		Round:   round,
+		Value:   newValueProposal.Value,
 	}
+	assert.Equal(t, expected, cm)
 
+	// We locked value v in round 0 and now v is proposed in round 1 so we expect to prevote for it.
+	algo = New(newNodeID(t), o)
+	algo.round = round
+	algo.lockedRound = 0
+	algo.lockedValue = newValueProposal.Value
+	rc, cm, to = algo.ReceiveMessage(newValueProposal)
+	assert.Nil(t, rc)
+	assert.Nil(t, to)
+
+	expected = &ConsensusMessage{
+		MsgType: Prevote,
+		Height:  height,
+		Round:   round,
+		Value:   newValueProposal.Value,
+	}
+	assert.Equal(t, expected, cm)
+
+	// We locked value v in round 0 and now a value other than v is proposed in round 1 so we expect to prevote for nil.
+	algo = New(newNodeID(t), o)
+	algo.round = round
+	algo.lockedRound = 0
+	algo.lockedValue = newValue(t)
+	rc, cm, to = algo.ReceiveMessage(newValueProposal)
+	assert.Nil(t, rc)
+	assert.Nil(t, to)
+
+	expected = &ConsensusMessage{
+		MsgType: Prevote,
+		Height:  height,
+		Round:   round,
+		Value:   NilValue,
+	}
 	assert.Equal(t, expected, cm)
 }
 
