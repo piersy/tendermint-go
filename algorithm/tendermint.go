@@ -202,7 +202,7 @@ func (a *Algorithm) timeout(timeoutType Step) *Timeout {
 // proposal ConsensusMessage to be broadcast, otherwise it returns a Timeout to
 // be scheduled.
 func (a *Algorithm) StartRound(proposalValue ValueID, round int64) (*ConsensusMessage, *Timeout) {
-	//println(a.nodeID.String(), height, "isproposer", a.oracle.Proposer(round, a.nodeID))
+	// println(a.nodeID.String(), height, "isproposer", a.oracle.Proposer(round, a.nodeID))
 
 	// sanity check
 	if round <= a.round {
@@ -220,7 +220,7 @@ func (a *Algorithm) StartRound(proposalValue ValueID, round int64) (*ConsensusMe
 		if a.validValue != NilValue {
 			proposalValue = a.validValue
 		}
-		//println(a.nodeID.String(), a.height(), "returning message", value.String())
+		// println(a.nodeID.String(), a.height(), "returning message", value.String())
 		return a.msg(Propose, proposalValue), nil
 	} else { //nolint
 		return nil, a.timeout(Propose)
@@ -242,19 +242,18 @@ type RoundChange struct {
 //
 // The values that can be returned are as follows:
 //
-// - *ConsensusMessage - This should be broadcast to the rest of the network,
-//   including ourselves. This action can be taken asynchronously.
+//   - *ConsensusMessage - This should be broadcast to the rest of the network,
+//     including ourselves. This action can be taken asynchronously.
 //
-// - *RoundChange - This indicates that we need to progress to the next round,
-//   and possibly next height, ultimately leading to calling StartRound with the
-//   enclosed Height and Round. The call to StartRound must be executed by the
-//   calling goroutine before any other call to ReceiveMessage.
+//   - *RoundChange - This indicates that we need to progress to the next round,
+//     and possibly next height, ultimately leading to calling StartRound with the
+//     enclosed Height and Round. The call to StartRound must be executed by the
+//     calling goroutine before any other call to ReceiveMessage.
 //
-// - *Timeout - This should be scheduled based to call the corresponding OnTimeout*
-//   method after the Delay with the enclosed Height and Round. This action can be
-//   taken asynchronously.
+//   - *Timeout - This should be scheduled based to call the corresponding OnTimeout*
+//     method after the Delay with the enclosed Height and Round. This action can be
+//     taken asynchronously.
 func (a *Algorithm) ReceiveMessage(cm *ConsensusMessage) (*RoundChange, *ConsensusMessage, *Timeout) {
-
 	r := a.round
 	s := a.step
 	o := a.oracle
@@ -288,10 +287,10 @@ func (a *Algorithm) ReceiveMessage(cm *ConsensusMessage) (*RoundChange, *Consens
 	if t.In(Propose) && cm.Round == r && cm.ValidRound == -1 && s == Propose {
 		a.step = Prevote
 		if o.Valid(cm.Value) && a.lockedRound == -1 || a.lockedValue == cm.Value {
-			//println(a.nodeID.String(), a.height(), cm.String(), "line 22 val")
+			// println(a.nodeID.String(), a.height(), cm.String(), "line 22 val")
 			return nil, a.msg(Prevote, cm.Value), nil
 		} else { //nolint
-			//println(a.nodeID.String(), a.height(), cm.String(), "line 22 nil")
+			// println(a.nodeID.String(), a.height(), cm.String(), "line 22 nil")
 			return nil, a.msg(Prevote, NilValue), nil
 		}
 	}
@@ -300,10 +299,10 @@ func (a *Algorithm) ReceiveMessage(cm *ConsensusMessage) (*RoundChange, *Consens
 	if t.In(Propose, Prevote) && p != nil && p.Round == r && o.PrevoteQThresh(p.ValidRound, &p.Value) && s == Propose && (p.ValidRound >= 0 && p.ValidRound < r) {
 		a.step = Prevote
 		if o.Valid(p.Value) && (a.lockedRound <= p.ValidRound || a.lockedValue == p.Value) {
-			//println(a.nodeID.String(), a.height(), cm.String(), "line 28 val")
+			// println(a.nodeID.String(), a.height(), cm.String(), "line 28 val")
 			return nil, a.msg(Prevote, p.Value), nil
 		} else { //nolint
-			//println(a.nodeID.String(), a.height(), cm.String(), "line 28 nil")
+			// println(a.nodeID.String(), a.height(), cm.String(), "line 28 nil")
 			return nil, a.msg(Prevote, NilValue), nil
 		}
 	}
@@ -319,21 +318,21 @@ func (a *Algorithm) ReceiveMessage(cm *ConsensusMessage) (*RoundChange, *Consens
 		}
 		a.validValue = p.Value
 		a.validRound = r
-		//println(a.nodeID.String(), a.height(), cm.String(), "line 36 val")
+		// println(a.nodeID.String(), a.height(), cm.String(), "line 36 val")
 		return nil, a.msg(Precommit, p.Value), nil
 	}
 
 	// Line 44
 	if t.In(Prevote) && cm.Round == r && o.PrevoteQThresh(r, &NilValue) && s == Prevote {
 		a.step = Precommit
-		//println(a.nodeID.String(), a.height(), cm.String(), "line 44 nil")
+		// println(a.nodeID.String(), a.height(), cm.String(), "line 44 nil")
 		return nil, a.msg(Precommit, NilValue), nil
 	}
 
 	// Line 34
 	if t.In(Prevote) && cm.Round == r && o.PrevoteQThresh(r, nil) && s == Prevote && !a.line34Executed {
 		a.line34Executed = true
-		//println(a.nodeID.String(), a.height(), cm.String(), "line 34 timeout")
+		// println(a.nodeID.String(), a.height(), cm.String(), "line 34 timeout")
 		return nil, nil, a.timeout(Prevote)
 	}
 
@@ -345,7 +344,7 @@ func (a *Algorithm) ReceiveMessage(cm *ConsensusMessage) (*RoundChange, *Consens
 			a.validRound = -1
 			a.validValue = NilValue
 		}
-		//println(a.nodeID.String(), a.height(), cm.String(), "line 49 decide")
+		// println(a.nodeID.String(), a.height(), cm.String(), "line 49 decide")
 		// Return the decided proposal
 		return &RoundChange{Round: 0, Decision: p}, nil, nil
 	}
@@ -353,7 +352,7 @@ func (a *Algorithm) ReceiveMessage(cm *ConsensusMessage) (*RoundChange, *Consens
 	// Line 47
 	if t.In(Precommit) && cm.Round == r && o.PrecommitQThresh(r, nil) && !a.line47Executed {
 		a.line47Executed = true
-		//println(a.nodeID.String(), a.height(), cm.String(), "line 47 timeout")
+		// println(a.nodeID.String(), a.height(), cm.String(), "line 47 timeout")
 		return nil, nil, a.timeout(Precommit)
 	}
 
@@ -361,7 +360,7 @@ func (a *Algorithm) ReceiveMessage(cm *ConsensusMessage) (*RoundChange, *Consens
 	if cm.Round > r && o.FThresh(cm.Round) {
 		return &RoundChange{Round: cm.Round}, nil, nil
 	}
-	//println(a.nodeID.String(), a.height(), cm.String(), "no condition match")
+	// println(a.nodeID.String(), a.height(), cm.String(), "no condition match")
 	return nil, nil, nil
 }
 
