@@ -365,25 +365,20 @@ func (a *Algorithm) ReceiveMessage(cm *ConsensusMessage) (*RoundChange, *Consens
 	return nil, nil, nil
 }
 
-func (a *Algorithm) OnTimeoutPropose(height uint64, round int64) *ConsensusMessage {
-	if height == a.height() && round == a.round && a.step == Propose {
-		a.step = Prevote
-		return a.msg(Prevote, NilValue)
+func (a *Algorithm) OnTimeout(t *Timeout) (*ConsensusMessage, *RoundChange) {
+	if t.Height == a.height() && t.Round == a.round {
+		switch t.TimeoutType {
+		case Propose:
+			a.step = Prevote
+			return a.msg(Prevote, NilValue), nil
+		case Prevote:
+			a.step = Precommit
+			return a.msg(Precommit, NilValue), nil
+		case Precommit:
+			return nil, &RoundChange{Round: a.round + 1}
+		default:
+			panic(fmt.Sprintf("unrecognized timeout type %d", t.TimeoutType))
+		}
 	}
-	return nil
-}
-
-func (a *Algorithm) OnTimeoutPrevote(height uint64, round int64) *ConsensusMessage {
-	if height == a.height() && round == a.round && a.step == Prevote {
-		a.step = Precommit
-		return a.msg(Precommit, NilValue)
-	}
-	return nil
-}
-
-func (a *Algorithm) OnTimeoutPrecommit(height uint64, round int64) *RoundChange {
-	if height == a.height() && round == a.round {
-		return &RoundChange{Round: a.round + 1}
-	}
-	return nil
+	return nil, nil
 }

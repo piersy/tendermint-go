@@ -71,86 +71,56 @@ func TestStartRound(t *testing.T) {
 	assert.Equal(t, expectedTimeout, to)
 }
 
-func TestOnTimeoutPropose(t *testing.T) {
+func TestOnTimeout(t *testing.T) {
 	o := &mockOracle{
 		height: 1,
 	}
 	algo := New(newNodeID(t), o)
-	algo.round = 1
-	expected := &ConsensusMessage{
+	to := &Timeout{
+		TimeoutType: Propose,
+		Height:      o.height,
+		Round:       algo.round,
+	}
+
+	// Propose timeout, should result in nil prevote
+	cm, rc := algo.OnTimeout(to)
+	assert.Nil(t, rc)
+	assert.Equal(t, &ConsensusMessage{
 		MsgType:    Prevote,
 		Height:     o.Height(),
 		Round:      algo.round,
 		Value:      NilValue,
 		ValidRound: 0,
+	}, cm)
+
+	to = &Timeout{
+		TimeoutType: Prevote,
+		Height:      o.height,
+		Round:       algo.round,
 	}
-	// The timeout round and height match the current round and height, expect
-	// prevote for nilValue and algorithm step set to Prevote
-	cm := algo.OnTimeoutPropose(o.Height(), algo.round)
-	assert.Equal(t, expected, cm)
-	assert.Equal(t, Prevote, algo.step)
-
-	// The timeout height does not match, expect nil
-	cm = algo.OnTimeoutPropose(o.Height()-1, algo.round)
-	assert.Nil(t, cm)
-
-	// The timeout round does not match, expect nil
-	cm = algo.OnTimeoutPropose(o.Height(), algo.round-1)
-	assert.Nil(t, cm)
-}
-
-func TestOnTimeoutPrevote(t *testing.T) {
-	o := &mockOracle{
-		height: 1,
-	}
-	algo := New(newNodeID(t), o)
-	algo.round = 1
-	algo.step = Prevote
-	expected := &ConsensusMessage{
+	// Prevote timeout, should result in nil precommit
+	cm, rc = algo.OnTimeout(to)
+	assert.Nil(t, rc)
+	assert.Equal(t, &ConsensusMessage{
 		MsgType:    Precommit,
 		Height:     o.Height(),
 		Round:      algo.round,
 		Value:      NilValue,
 		ValidRound: 0,
+	}, cm)
+
+	to = &Timeout{
+		TimeoutType: Precommit,
+		Height:      o.height,
+		Round:       algo.round,
 	}
-
-	// The timeout round and height match the current round and height, expect
-	// precommit for nilValue and algorithm step set to Precommit
-	cm := algo.OnTimeoutPrevote(o.Height(), algo.round)
-	assert.Equal(t, expected, cm)
-	assert.Equal(t, Precommit, algo.step)
-
-	// The timeout height does not match, expect nil
-	cm = algo.OnTimeoutPrevote(o.Height()-1, algo.round)
+	// Precommit timeout should result in a round change with no decision.
+	cm, rc = algo.OnTimeout(to)
 	assert.Nil(t, cm)
-
-	// The timeout round does not match, expect nil
-	cm = algo.OnTimeoutPrevote(o.Height(), algo.round-1)
-	assert.Nil(t, cm)
-}
-
-func TestOnTimeoutPrecommit(t *testing.T) {
-	o := &mockOracle{
-		height: 1,
-	}
-	algo := New(newNodeID(t), o)
-	algo.round = 1
-	expected := &RoundChange{
-		Round: algo.round + 1,
-	}
-
-	// The timeout round and height match the current round and height, expect
-	// round change message for next round with nil decision.
-	cm := algo.OnTimeoutPrecommit(o.Height(), algo.round)
-	assert.Equal(t, expected, cm)
-
-	// The timeout height does not match, expect nil
-	cm = algo.OnTimeoutPrecommit(o.Height()-1, algo.round)
-	assert.Nil(t, cm)
-
-	// The timeout round does not match, expect nil
-	cm = algo.OnTimeoutPrecommit(o.Height(), algo.round-1)
-	assert.Nil(t, cm)
+	assert.Equal(t, &RoundChange{
+		Decision: nil,
+		Round:    algo.round + 1,
+	}, rc)
 }
 
 // Handling a proposal message for a new value
