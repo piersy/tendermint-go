@@ -12,8 +12,10 @@ import (
 type Store struct {
 	messages []*algorithm.ConsensusMessage
 	hashes   map[tendermint.Hash]struct{}
+	valid    map[tendermint.Hash]struct{}
 }
 
+// AddMessage adds the given message to the store.
 func (s *Store) AddMessage(m *algorithm.ConsensusMessage) error {
 	var b bytes.Buffer
 	err := gob.NewEncoder(&b).Encode(m)
@@ -27,6 +29,17 @@ func (s *Store) AddMessage(m *algorithm.ConsensusMessage) error {
 		s.messages = append(s.messages, m)
 	}
 	return nil
+}
+
+// SetValid sets the given value hash as valid.
+func (s *Store) SetValid(valueHash *tendermint.Hash) {
+	s.valid[*valueHash] = struct{}{}
+}
+
+// Valid checks the given value hash to see if it has been marked valid.
+func (s *Store) Valid(valueHash *tendermint.Hash) bool {
+	_, ok := s.valid[*valueHash]
+	return ok
 }
 
 // Returns a proposal for the given round and valueHash if it exists.
@@ -65,7 +78,7 @@ func (s *Store) CountPrecommits(round int64, valueHash tendermint.Hash) int {
 	return result
 }
 
-// CountFailures counts the number of precommit and prevote messages for the given round.
+// CountAll counts the number of precommit and prevote messages for the given round.
 func (s *Store) CountAll(round int64) int {
 	result := 0
 	for _, v := range s.messages {
