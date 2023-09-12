@@ -89,10 +89,10 @@ func (s Step) In(steps ...Step) bool {
 // valid if they trigger in the same height, round and step as when they were
 // scheduled.
 type Timeout struct {
-	TimeoutType Step
+	timeoutType Step
 	Delay       uint
-	Height      uint64
-	Round       int64
+	height      uint64
+	round       int64
 }
 
 // ConsensusMessage is returned to the caller to indicate that this message
@@ -190,9 +190,9 @@ func (a *Algorithm) timeout(timeoutType Step) *Timeout {
 		panic(fmt.Sprintf("at this point round should be greater than or eaqual to zero instead got: %d", a.round))
 	}
 	return &Timeout{
-		TimeoutType: timeoutType,
-		Height:      a.height(),
-		Round:       a.round,
+		timeoutType: timeoutType,
+		height:      a.height(),
+		round:       a.round,
 		Delay:       1 + uint(a.round),
 	}
 }
@@ -365,8 +365,8 @@ func (a *Algorithm) ReceiveMessage(cm *ConsensusMessage) (*RoundChange, *Consens
 }
 
 func (a *Algorithm) OnTimeout(t *Timeout) (*ConsensusMessage, *RoundChange) {
-	if t.Height == a.height() && t.Round == a.round {
-		switch t.TimeoutType {
+	if t.height == a.height() && t.round == a.round {
+		switch t.timeoutType {
 		case Propose:
 			a.step = Prevote
 			return a.msg(Prevote, NilValue), nil
@@ -376,7 +376,7 @@ func (a *Algorithm) OnTimeout(t *Timeout) (*ConsensusMessage, *RoundChange) {
 		case Precommit:
 			return nil, &RoundChange{Round: a.round + 1}
 		default:
-			panic(fmt.Sprintf("unrecognized timeout type %d", t.TimeoutType))
+			panic(fmt.Sprintf("unrecognized timeout type %d", t.timeoutType))
 		}
 	}
 	return nil, nil

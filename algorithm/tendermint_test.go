@@ -61,10 +61,10 @@ func TestStartRound(t *testing.T) {
 	// We are not the proposer, expect timeout message
 	algo = New(newNodeID(t), o)
 	expectedTimeout := &Timeout{
-		TimeoutType: Propose,
+		timeoutType: Propose,
 		Delay:       1,
-		Height:      o.Height(),
-		Round:       round,
+		height:      o.Height(),
+		round:       round,
 	}
 	cm, to = algo.StartRound(NilValue, round)
 	assert.Nil(t, cm)
@@ -77,9 +77,9 @@ func TestOnTimeout(t *testing.T) {
 	}
 	algo := New(newNodeID(t), o)
 	to := &Timeout{
-		TimeoutType: Propose,
-		Height:      o.height,
-		Round:       algo.round,
+		timeoutType: Propose,
+		height:      o.height,
+		round:       algo.round,
 	}
 
 	// Propose timeout, should result in nil prevote
@@ -94,9 +94,9 @@ func TestOnTimeout(t *testing.T) {
 	}, cm)
 
 	to = &Timeout{
-		TimeoutType: Prevote,
-		Height:      o.height,
-		Round:       algo.round,
+		timeoutType: Prevote,
+		height:      o.height,
+		round:       algo.round,
 	}
 	// Prevote timeout, should result in nil precommit
 	cm, rc = algo.OnTimeout(to)
@@ -110,9 +110,9 @@ func TestOnTimeout(t *testing.T) {
 	}, cm)
 
 	to = &Timeout{
-		TimeoutType: Precommit,
-		Height:      o.height,
-		Round:       algo.round,
+		timeoutType: Precommit,
+		height:      o.height,
+		round:       algo.round,
 	}
 	// Precommit timeout should result in a round change with no decision.
 	cm, rc = algo.OnTimeout(to)
