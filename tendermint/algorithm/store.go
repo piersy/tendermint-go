@@ -1,4 +1,4 @@
-package store
+package algorithm
 
 import (
 	"bytes"
@@ -6,17 +6,23 @@ import (
 	"encoding/gob"
 
 	"github.com/piersy/tendermint-go/tendermint"
-	"github.com/piersy/tendermint-go/tendermint/algorithm"
 )
 
 type Store struct {
-	messages []*algorithm.ConsensusMessage
+	messages []*ConsensusMessage
 	hashes   map[tendermint.Hash]struct{}
-	valid    map[tendermint.Hash]struct{}
+	valid    map[*tendermint.Hash]struct{}
+}
+
+func NewStore() *Store {
+	return &Store{
+		hashes: make(map[tendermint.Hash]struct{}),
+		valid:  make(map[*tendermint.Hash]struct{}),
+	}
 }
 
 // AddMessage adds the given message to the store.
-func (s *Store) AddMessage(m *algorithm.ConsensusMessage) error {
+func (s *Store) AddMessage(m *ConsensusMessage) error {
 	var b bytes.Buffer
 	err := gob.NewEncoder(&b).Encode(m)
 	if err != nil {
@@ -33,19 +39,19 @@ func (s *Store) AddMessage(m *algorithm.ConsensusMessage) error {
 
 // SetValid sets the given value hash as valid.
 func (s *Store) SetValid(valueHash *tendermint.Hash) {
-	s.valid[*valueHash] = struct{}{}
+	s.valid[valueHash] = struct{}{}
 }
 
 // Valid checks the given value hash to see if it has been marked valid.
 func (s *Store) Valid(valueHash *tendermint.Hash) bool {
-	_, ok := s.valid[*valueHash]
+	_, ok := s.valid[valueHash]
 	return ok
 }
 
 // Returns a proposal for the given round and valueHash if it exists.
-func (s *Store) MatchingProposal(round int64, valueHash tendermint.Hash) *algorithm.ConsensusMessage {
+func (s *Store) MatchingProposal(round int64, valueHash tendermint.Hash) *ConsensusMessage {
 	for _, v := range s.messages {
-		if v.MsgType == algorithm.Propose && v.Round == round && v.Value == valueHash {
+		if v.MsgType == Propose && v.Round == round && v.Value == valueHash {
 			return v
 		}
 	}
@@ -53,12 +59,12 @@ func (s *Store) MatchingProposal(round int64, valueHash tendermint.Hash) *algori
 }
 
 // CountPrevotes returns true if a there is a quorum of prevotes for valueHash.
-// Passing algorithm.NilValue as the valueHash acts as a wildcard and will
+// Passing NilValue as the valueHash acts as a wildcard and will
 // cause all prevotes for the round to be counted.
 func (s *Store) CountPrevotes(round int64, valueHash tendermint.Hash) int {
 	result := 0
 	for _, v := range s.messages {
-		if v.MsgType == algorithm.Prevote && v.Round == round && (valueHash == algorithm.NilValue || v.Value == valueHash) {
+		if v.MsgType == Prevote && v.Round == round && (valueHash == NilValue || v.Value == valueHash) {
 			result++
 		}
 	}
@@ -66,12 +72,12 @@ func (s *Store) CountPrevotes(round int64, valueHash tendermint.Hash) int {
 }
 
 // CountPrecommits returns true if a there is a quorum of prevotes for valueHash.
-// Passing algorithm.NilValue as the valueHash acts as a wildcard and will
+// Passing NilValue as the valueHash acts as a wildcard and will
 // cause all precommits for the round to be counted.
 func (s *Store) CountPrecommits(round int64, valueHash tendermint.Hash) int {
 	result := 0
 	for _, v := range s.messages {
-		if v.MsgType == algorithm.Precommit && v.Round == round && (valueHash == algorithm.NilValue || v.Value == valueHash) {
+		if v.MsgType == Precommit && v.Round == round && (valueHash == NilValue || v.Value == valueHash) {
 			result++
 		}
 	}
@@ -82,7 +88,7 @@ func (s *Store) CountPrecommits(round int64, valueHash tendermint.Hash) int {
 func (s *Store) CountAll(round int64) int {
 	result := 0
 	for _, v := range s.messages {
-		if (v.MsgType == algorithm.Precommit || v.MsgType == algorithm.Prevote) && v.Round == round && v.Value == algorithm.NilValue {
+		if (v.MsgType == Precommit || v.MsgType == Prevote) && v.Round == round && v.Value == NilValue {
 			result++
 		}
 	}

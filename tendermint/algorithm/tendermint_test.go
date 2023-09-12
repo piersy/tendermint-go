@@ -29,7 +29,7 @@ func TestStartRound(t *testing.T) {
 	var round int64 = 0
 	value := newValue(t)
 
-	o := &mockOracle{}
+	o := NewBasicOracle(2, 0)
 
 	// We are proposer, expect propose message
 	algo := New(newNodeID(t), o)
@@ -138,11 +138,11 @@ func TestReceiveMessageLine22(t *testing.T) {
 	}
 	o := &mockOracle{
 		height: height,
-		matchingProposal: func(cm *ConsensusMessage) *ConsensusMessage {
+		matchingProposal: func(round int64, valueHash *tendermint.Hash) *ConsensusMessage {
 			return newValueProposal
 		},
-		valid: func(v tendermint.Hash) bool {
-			return v == newValueProposal.Value
+		valid: func(v *tendermint.Hash) bool {
+			return *v == newValueProposal.Value
 		},
 	}
 
@@ -198,20 +198,20 @@ func TestReceiveMessageLine22(t *testing.T) {
 }
 
 type mockOracle struct {
-	valid            func(v tendermint.Hash) bool
-	matchingProposal func(cm *ConsensusMessage) *ConsensusMessage
+	valid            func(v *tendermint.Hash) bool
+	matchingProposal func(round int64, value *tendermint.Hash) *ConsensusMessage
 	prevoteQThresh   func(round int64, value *tendermint.Hash) bool
 	precommitQThresh func(round int64, value *tendermint.Hash) bool
 	fThresh          func(round int64) bool
 	height           uint64
 }
 
-func (m *mockOracle) Valid(value tendermint.Hash) bool {
+func (m *mockOracle) Valid(value *tendermint.Hash) bool {
 	return m.valid(value)
 }
 
-func (m *mockOracle) MatchingProposal(cm *ConsensusMessage) *ConsensusMessage {
-	return m.matchingProposal(cm)
+func (m *mockOracle) MatchingProposal(round int64, value *tendermint.Hash) *ConsensusMessage {
+	return m.matchingProposal(round, value)
 }
 
 func (m *mockOracle) PrevoteQThresh(round int64, value *tendermint.Hash) bool {

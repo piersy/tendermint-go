@@ -112,15 +112,13 @@ func (cm *ConsensusMessage) String() string {
 type Oracle interface {
 	// Valid returns true if the value associated with the given tendermint.Hash is
 	// valid.
-	Valid(tendermint.Hash) bool
-	// MatchingProposal finds the Proposal message having the same tendermint.Hash as
-	// the given message. If a proposal message is provided, the same message
-	// will be returned.
-	MatchingProposal(*ConsensusMessage) *ConsensusMessage
+	Valid(*tendermint.Hash) bool
+	// MatchingProposal returns a Proposal message with the given round and valueHash if it exists.
+	MatchingProposal(round int64, valueHash *tendermint.Hash) *ConsensusMessage
 	// PrevoteQThresh returns true if a there is a quorum of prevotes for valueID.
-	PrevoteQThresh(round int64, valueID *tendermint.Hash) bool
+	PrevoteQThresh(round int64, valueHash *tendermint.Hash) bool
 	// PrevoteQThresh returns true if a there is a quorum of precommits for valueID.
-	PrecommitQThresh(round int64, valueID *tendermint.Hash) bool
+	PrecommitQThresh(round int64, valueHash *tendermint.Hash) bool
 	// FThresh indicates whether we have messages whose voting power exceeds
 	// the failure threshold for the given round.
 	FThresh(round int64) bool
@@ -254,7 +252,7 @@ func (a *Algorithm) ReceiveMessage(cm *ConsensusMessage) (*RoundChange, *Consens
 
 	// look up matching proposal, in the case of ost message with msgType
 	// proposal the matching proposal is the message.
-	p := o.MatchingProposal(cm)
+	p := o.MatchingProposal(cm.Round, &cm.Value)
 
 	// Some of the checks in these upon conditions are omitted because they have already been checked.
 	//
@@ -279,7 +277,7 @@ func (a *Algorithm) ReceiveMessage(cm *ConsensusMessage) (*RoundChange, *Consens
 	// Line 22
 	if t.In(Propose) && cm.Round == r && cm.ValidRound == -1 && s == Propose {
 		a.step = Prevote
-		if o.Valid(cm.Value) && a.lockedRound == -1 || a.lockedValue == cm.Value {
+		if o.Valid(&cm.Value) && a.lockedRound == -1 || a.lockedValue == cm.Value {
 			// println(a.nodeID.String(), a.height(), cm.String(), "line 22 val")
 			return nil, a.msg(Prevote, cm.Value), nil
 		} else { //nolint
@@ -291,7 +289,7 @@ func (a *Algorithm) ReceiveMessage(cm *ConsensusMessage) (*RoundChange, *Consens
 	// Line 28
 	if t.In(Propose, Prevote) && p != nil && p.Round == r && o.PrevoteQThresh(p.ValidRound, &p.Value) && s == Propose && (p.ValidRound >= 0 && p.ValidRound < r) {
 		a.step = Prevote
-		if o.Valid(p.Value) && (a.lockedRound <= p.ValidRound || a.lockedValue == p.Value) {
+		if o.Valid(&p.Value) && (a.lockedRound <= p.ValidRound || a.lockedValue == p.Value) {
 			// println(a.nodeID.String(), a.height(), cm.String(), "line 28 val")
 			return nil, a.msg(Prevote, p.Value), nil
 		} else { //nolint
@@ -302,7 +300,7 @@ func (a *Algorithm) ReceiveMessage(cm *ConsensusMessage) (*RoundChange, *Consens
 
 	////println(a.nodeId.String(), a.height(), t.In(Propose, Prevote), p != nil, p.Round == r, o.PrevoteQThresh(r, &p.Value), o.Valid(p.Value), s >= Prevote, !a.line36Executed)
 	// Line 36
-	if t.In(Propose, Prevote) && p != nil && p.Round == r && o.PrevoteQThresh(r, &p.Value) && o.Valid(p.Value) && s >= Prevote && !a.line36Executed {
+	if t.In(Propose, Prevote) && p != nil && p.Round == r && o.PrevoteQThresh(r, &p.Value) && o.Valid(&p.Value) && s >= Prevote && !a.line36Executed {
 		a.line36Executed = true
 		if s == Prevote {
 			a.lockedValue = p.Value
@@ -331,7 +329,7 @@ func (a *Algorithm) ReceiveMessage(cm *ConsensusMessage) (*RoundChange, *Consens
 
 	// Line 49
 	if t.In(Propose, Precommit) && p != nil && o.PrecommitQThresh(p.Round, &p.Value) {
-		if o.Valid(p.Value) {
+		if o.Valid(&p.Value) {
 			a.lockedRound = -1
 			a.lockedValue = NilValue
 			a.validRound = -1
