@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"testing"
 
+	"github.com/piersy/tendermint-go/tendermint"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,8 +18,8 @@ func newNodeID(t *testing.T) NodeID {
 	return nodeID
 }
 
-func newValue(t *testing.T) ValueID {
-	var value ValueID
+func newValue(t *testing.T) tendermint.Hash {
+	var value tendermint.Hash
 	_, err := rand.Read(value[:])
 	require.NoError(t, err)
 	return value
@@ -140,7 +141,7 @@ func TestReceiveMessageLine22(t *testing.T) {
 		matchingProposal: func(cm *ConsensusMessage) *ConsensusMessage {
 			return newValueProposal
 		},
-		valid: func(v ValueID) bool {
+		valid: func(v tendermint.Hash) bool {
 			return v == newValueProposal.Value
 		},
 	}
@@ -197,15 +198,15 @@ func TestReceiveMessageLine22(t *testing.T) {
 }
 
 type mockOracle struct {
-	valid            func(v ValueID) bool
+	valid            func(v tendermint.Hash) bool
 	matchingProposal func(cm *ConsensusMessage) *ConsensusMessage
-	prevoteQThresh   func(round int64, value *ValueID) bool
-	precommitQThresh func(round int64, value *ValueID) bool
+	prevoteQThresh   func(round int64, value *tendermint.Hash) bool
+	precommitQThresh func(round int64, value *tendermint.Hash) bool
 	fThresh          func(round int64) bool
 	height           uint64
 }
 
-func (m *mockOracle) Valid(value ValueID) bool {
+func (m *mockOracle) Valid(value tendermint.Hash) bool {
 	return m.valid(value)
 }
 
@@ -213,11 +214,11 @@ func (m *mockOracle) MatchingProposal(cm *ConsensusMessage) *ConsensusMessage {
 	return m.matchingProposal(cm)
 }
 
-func (m *mockOracle) PrevoteQThresh(round int64, value *ValueID) bool {
+func (m *mockOracle) PrevoteQThresh(round int64, value *tendermint.Hash) bool {
 	return m.prevoteQThresh(round, value)
 }
 
-func (m *mockOracle) PrecommitQThresh(round int64, value *ValueID) bool {
+func (m *mockOracle) PrecommitQThresh(round int64, value *tendermint.Hash) bool {
 	return m.precommitQThresh(round, value)
 }
 

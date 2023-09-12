@@ -13,19 +13,12 @@ package algorithm
 import (
 	"encoding/hex"
 	"fmt"
+
+	"github.com/piersy/tendermint-go/tendermint"
 )
 
-// ValueID is an identifier that represents a value, a ValueID could in some
-// cases literally be the value, but more likely it will be the hash (or some
-// other transformation) of some value.
-type ValueID [32]byte
-
-func (v ValueID) String() string {
-	return hex.EncodeToString(v[:3])
-}
-
 // NilValue  represents 'nil' in the tendermint whitepaper.
-var NilValue ValueID
+var NilValue tendermint.Hash
 
 // NodeID represents the ID of a node, although not explicitly mentioned in the
 // whitepaper, we need a way to identify ourselves if we are to ask if we are
@@ -101,7 +94,7 @@ type ConsensusMessage struct {
 	MsgType    Step
 	Height     uint64
 	Round      int64
-	Value      ValueID
+	Value      tendermint.Hash
 	ValidRound int64 // This field only has meaning for propose step. For prevote and precommit this value is ignored.
 }
 
@@ -117,17 +110,17 @@ func (cm *ConsensusMessage) String() string {
 // state, such as 'Am I the proposer' or 'Have i reached prevote quorum
 // threshold for value with id v?'
 type Oracle interface {
-	// Valid returns true if the value associated with the given ValueID is
+	// Valid returns true if the value associated with the given tendermint.Hash is
 	// valid.
-	Valid(ValueID) bool
-	// MatchingProposal finds the Proposal message having the same ValueID as
+	Valid(tendermint.Hash) bool
+	// MatchingProposal finds the Proposal message having the same tendermint.Hash as
 	// the given message. If a proposal message is provided, the same message
 	// will be returned.
 	MatchingProposal(*ConsensusMessage) *ConsensusMessage
 	// PrevoteQThresh returns true if a there is a quorum of prevotes for valueID.
-	PrevoteQThresh(round int64, valueID *ValueID) bool
+	PrevoteQThresh(round int64, valueID *tendermint.Hash) bool
 	// PrevoteQThresh returns true if a there is a quorum of precommits for valueID.
-	PrecommitQThresh(round int64, valueID *ValueID) bool
+	PrecommitQThresh(round int64, valueID *tendermint.Hash) bool
 	// FThresh indicates whether we have messages whose voting power exceeds
 	// the failure threshold for the given round.
 	FThresh(round int64) bool
@@ -144,9 +137,9 @@ type Algorithm struct {
 	round          int64
 	step           Step
 	lockedRound    int64
-	lockedValue    ValueID
+	lockedValue    tendermint.Hash
 	validRound     int64
-	validValue     ValueID
+	validValue     tendermint.Hash
 	line34Executed bool
 	line36Executed bool
 	line47Executed bool
@@ -172,7 +165,7 @@ func (a Algorithm) height() uint64 {
 	return a.oracle.Height()
 }
 
-func (a *Algorithm) msg(msgType Step, value ValueID) *ConsensusMessage {
+func (a *Algorithm) msg(msgType Step, value tendermint.Hash) *ConsensusMessage {
 	cm := &ConsensusMessage{
 		MsgType: msgType,
 		Height:  a.height(),
@@ -201,7 +194,7 @@ func (a *Algorithm) timeout(timeoutType Step) *Timeout {
 // node is a proposer (indicated by a non nil proposalValue) it retures a
 // proposal ConsensusMessage to be broadcast, otherwise it returns a Timeout to
 // be scheduled.
-func (a *Algorithm) StartRound(proposalValue ValueID, round int64) (*ConsensusMessage, *Timeout) {
+func (a *Algorithm) StartRound(proposalValue tendermint.Hash, round int64) (*ConsensusMessage, *Timeout) {
 	// println(a.nodeID.String(), height, "isproposer", a.oracle.Proposer(round, a.nodeID))
 
 	// sanity check
