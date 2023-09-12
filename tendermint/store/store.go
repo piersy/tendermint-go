@@ -1,27 +1,77 @@
 package store
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/gob"
+
 	"github.com/piersy/tendermint-go/tendermint"
 	"github.com/piersy/tendermint-go/tendermint/algorithm"
 )
 
 type Store struct {
-	messages []algorithm.ConsensusMessage
+	messages []*algorithm.ConsensusMessage
+	hashes   map[tendermint.Hash]struct{}
 }
 
+func (s *Store) AddMessage(m *algorithm.ConsensusMessage) error {
+	var b bytes.Buffer
+	err := gob.NewEncoder(&b).Encode(m)
+	if err != nil {
+		return err
+	}
+	h := sha256.Sum256(b.Bytes())
+	_, ok := s.hashes[h]
+	if !ok {
+		s.hashes[h] = struct{}{}
+		s.messages = append(s.messages, m)
+	}
+	return nil
+}
+
+// Returns a proposal for the given round and valueHash if it exists.
 func (s *Store) MatchingProposal(round int64, valueHash tendermint.Hash) *algorithm.ConsensusMessage {
 	for _, v := range s.messages {
-		if v.Round == round && v.Value == valueHash {
+		if v.MsgType == algorithm.Propose && v.Round == round && v.Value == valueHash {
 			return v
 		}
 	}
+	return nil
 }
 
-// MatchingProposal(*ConsensusMessage) *ConsensusMessage
-// // PrevoteQThresh returns true if a there is a quorum of prevotes for valueID.
-// PrevoteQThresh(round int64, valueID *ValueID) bool
-// // PrevoteQThresh returns true if a there is a quorum of precommits for valueID.
-// PrecommitQThresh(round int64, valueID *ValueID) bool
-// // FThresh indicates whether we have messages whose voting power exceeds
-// // the failure threshold for the given round.
-// FThresh(round int64) bool
+// CountPrevotes returns true if a there is a quorum of prevotes for valueHash.
+// Passing algorithm.NilValue as the valueHash acts as a wildcard and will
+// cause all prevotes for the round to be counted.
+func (s *Store) CountPrevotes(round int64, valueHash tendermint.Hash) int {
+	result := 0
+	for _, v := range s.messages {
+		if v.MsgType == algorithm.Prevote && v.Round == round && (valueHash == algorithm.NilValue || v.Value == valueHash) {
+			result++
+		}
+	}
+	return result
+}
+
+// CountPrecommits returns true if a there is a quorum of prevotes for valueHash.
+// Passing algorithm.NilValue as the valueHash acts as a wildcard and will
+// cause all precommits for the round to be counted.
+func (s *Store) CountPrecommits(round int64, valueHash tendermint.Hash) int {
+	result := 0
+	for _, v := range s.messages {
+		if v.MsgType == algorithm.Precommit && v.Round == round && (valueHash == algorithm.NilValue || v.Value == valueHash) {
+			result++
+		}
+	}
+	return result
+}
+
+// CountFailures counts the number of precommit and prevote messages for the given round.
+func (s *Store) CountAll(round int64) int {
+	result := 0
+	for _, v := range s.messages {
+		if (v.MsgType == algorithm.Precommit || v.MsgType == algorithm.Prevote) && v.Round == round && v.Value == algorithm.NilValue {
+			result++
+		}
+	}
+	return result
+}
