@@ -59,25 +59,25 @@ func (s *Store) MatchingProposal(round int64, valueHash tendermint.Hash) *Consen
 }
 
 // CountPrevotes returns true if a there is a quorum of prevotes for valueHash.
-// Passing NilValue as the valueHash acts as a wildcard and will
-// cause all prevotes for the round to be counted.
-func (s *Store) CountPrevotes(round int64, valueHash tendermint.Hash) int {
+// Passing nil as the valueHash acts as a wildcard and will cause all prevotes
+// for the round to be counted.
+func (s *Store) CountPrevotes(round int64, valueHash *tendermint.Hash) int {
 	result := 0
 	for _, v := range s.messages {
-		if v.MsgType == Prevote && v.Round == round && (valueHash == NilValue || v.Value == valueHash) {
+		if v.MsgType == Prevote && v.Round == round && (valueHash == nil || v.Value == *valueHash) {
 			result++
 		}
 	}
 	return result
 }
 
-// CountPrecommits returns true if a there is a quorum of prevotes for valueHash.
-// Passing NilValue as the valueHash acts as a wildcard and will
-// cause all precommits for the round to be counted.
-func (s *Store) CountPrecommits(round int64, valueHash tendermint.Hash) int {
+// CountPrecommits returns true if a there is a quorum of prevotes for
+// valueHash. Passing nil as the valueHash acts as a wildcard and will cause
+// all precommits for the round to be counted.
+func (s *Store) CountPrecommits(round int64, valueHash *tendermint.Hash) int {
 	result := 0
 	for _, v := range s.messages {
-		if v.MsgType == Precommit && v.Round == round && (valueHash == NilValue || v.Value == valueHash) {
+		if v.MsgType == Precommit && v.Round == round && (valueHash == nil || v.Value == *valueHash) {
 			result++
 		}
 	}

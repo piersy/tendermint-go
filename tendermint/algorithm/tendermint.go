@@ -91,6 +91,7 @@ type Timeout struct {
 // ConsensusMessage is returned to the caller to indicate that this message
 // should be broadcast to the network.
 type ConsensusMessage struct {
+	Sender     NodeID
 	MsgType    Step
 	Height     uint64
 	Round      int64
@@ -129,7 +130,7 @@ type Oracle interface {
 // Algorithm implements the state transitions defined by the tendermint
 // whitepaper. There are 2 main functions, StartRound which is called at the
 // beginning of each round, and then ReceiveMessage which is called with each
-// message received from the network drives subsequent state changes.
+// message received from the network and drives subsequent state changes.
 type Algorithm struct {
 	nodeID         NodeID
 	round          int64
@@ -165,6 +166,7 @@ func (a Algorithm) height() uint64 {
 
 func (a *Algorithm) msg(msgType Step, value tendermint.Hash) *ConsensusMessage {
 	cm := &ConsensusMessage{
+		Sender:  a.nodeID,
 		MsgType: msgType,
 		Height:  a.height(),
 		Round:   a.round,

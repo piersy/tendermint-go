@@ -28,12 +28,16 @@ func newValue(t *testing.T) tendermint.Hash {
 func TestStartRound(t *testing.T) {
 	var round int64 = 0
 	value := newValue(t)
+	numValidators := 2
+	nodeID := newNodeID(t)
 
-	o := NewBasicOracle(2, 0)
+	s := NewStore()
+	o := NewBasicOracle(numValidators, 0, s)
 
 	// We are proposer, expect propose message
-	algo := New(newNodeID(t), o)
+	algo := New(nodeID, o)
 	expected := &ConsensusMessage{
+		Sender:     nodeID,
 		MsgType:    Propose,
 		Height:     o.Height(),
 		Round:      round,
@@ -46,9 +50,10 @@ func TestStartRound(t *testing.T) {
 
 	// We are proposer, and validValue has been set, expect propose with
 	// validValue.
-	algo = New(newNodeID(t), o)
+	algo = New(nodeID, o)
 	algo.validValue = newValue(t)
 	expected = &ConsensusMessage{
+		Sender:     nodeID,
 		MsgType:    Propose,
 		Height:     o.Height(),
 		Round:      round,
@@ -60,7 +65,7 @@ func TestStartRound(t *testing.T) {
 	assert.Equal(t, expected, cm)
 
 	// We are not the proposer, expect timeout message
-	algo = New(newNodeID(t), o)
+	algo = New(nodeID, o)
 	expectedTimeout := &Timeout{
 		timeoutType: Propose,
 		Delay:       1,
@@ -76,7 +81,8 @@ func TestOnTimeout(t *testing.T) {
 	o := &mockOracle{
 		height: 1,
 	}
-	algo := New(newNodeID(t), o)
+	nodeID := newNodeID(t)
+	algo := New(nodeID, o)
 	to := &Timeout{
 		timeoutType: Propose,
 		height:      o.height,
@@ -87,6 +93,7 @@ func TestOnTimeout(t *testing.T) {
 	cm, rc := algo.OnTimeout(to)
 	assert.Nil(t, rc)
 	assert.Equal(t, &ConsensusMessage{
+		Sender:     nodeID,
 		MsgType:    Prevote,
 		Height:     o.Height(),
 		Round:      algo.round,
@@ -103,6 +110,7 @@ func TestOnTimeout(t *testing.T) {
 	cm, rc = algo.OnTimeout(to)
 	assert.Nil(t, rc)
 	assert.Equal(t, &ConsensusMessage{
+		Sender:     nodeID,
 		MsgType:    Precommit,
 		Height:     o.Height(),
 		Round:      algo.round,
@@ -125,76 +133,92 @@ func TestOnTimeout(t *testing.T) {
 }
 
 // Handling a proposal message for a new value
-func TestReceiveMessageLine22(t *testing.T) {
+func TestSuccessfulRun(t *testing.T) {
 	// proposer := newNodeID(t)
 	var height uint64 = 1
-	var round int64 = 1
-	newValueProposal := &ConsensusMessage{
-		MsgType:    Propose,
-		Height:     height,
-		Round:      round,
-		Value:      newValue(t),
-		ValidRound: -1,
-	}
-	o := &mockOracle{
-		height: height,
-		matchingProposal: func(round int64, valueHash *tendermint.Hash) *ConsensusMessage {
-			return newValueProposal
-		},
-		valid: func(v *tendermint.Hash) bool {
-			return *v == newValueProposal.Value
-		},
-	}
-
-	algo := New(newNodeID(t), o)
-	algo.round = round
+	var round int64 = 0
+	value := newValue(t)
+	nodeID := newNodeID(t)
+	numValidators := 2
+	s := NewStore()
+	o := NewBasicOracle(numValidators, height, s)
+	algo := New(nodeID, o)
+	proposal, to := algo.StartRound(value, round)
+	assert.Nil(t, to)
+	require.NoError(t, s.AddMessage(proposal))
+	s.SetValid(&proposal.Value)
 	// We haven't locked a round or a value, so we expect to prevote for the
 	// proposal.
-	rc, cm, to := algo.ReceiveMessage(newValueProposal)
+	rc, cm, to := algo.ReceiveMessage(proposal)
 	assert.Nil(t, rc)
 	assert.Nil(t, to)
 
 	expected := &ConsensusMessage{
+		Sender:  nodeID,
 		MsgType: Prevote,
 		Height:  height,
 		Round:   round,
-		Value:   newValueProposal.Value,
+		Value:   value,
 	}
 	assert.Equal(t, expected, cm)
+	require.NoError(t, s.AddMessage(cm))
 
-	// We locked value v in round 0 and now v is proposed in round 1 so we expect to prevote for it.
-	algo = New(newNodeID(t), o)
-	algo.round = round
-	algo.lockedRound = 0
-	algo.lockedValue = newValueProposal.Value
-	rc, cm, to = algo.ReceiveMessage(newValueProposal)
+	// Process the prevote we expect no state change since we need to see 2 prevotes to progress.
+	rc, cm, to = algo.ReceiveMessage(cm)
+	assert.Nil(t, rc)
+	assert.Nil(t, to)
+	assert.Nil(t, cm)
+
+	otherNodePrevote := &ConsensusMessage{
+		Sender:  newNodeID(t),
+		MsgType: Prevote,
+		Height:  height,
+		Round:   round,
+		Value:   value,
+	}
+	require.NoError(t, s.AddMessage(otherNodePrevote))
+
+	// Process another prevote, this should result in a precommit, since we have recieved 2 votes.
+	rc, cm, to = algo.ReceiveMessage(otherNodePrevote)
 	assert.Nil(t, rc)
 	assert.Nil(t, to)
 
 	expected = &ConsensusMessage{
-		MsgType: Prevote,
+		Sender:  nodeID,
+		MsgType: Precommit,
 		Height:  height,
 		Round:   round,
-		Value:   newValueProposal.Value,
+		Value:   value,
 	}
 	assert.Equal(t, expected, cm)
+	require.NoError(t, s.AddMessage(cm))
 
-	// We locked value v in round 0 and now a value other than v is proposed in round 1 so we expect to prevote for nil.
-	algo = New(newNodeID(t), o)
-	algo.round = round
-	algo.lockedRound = 0
-	algo.lockedValue = newValue(t)
-	rc, cm, to = algo.ReceiveMessage(newValueProposal)
+	// Process the precommit we expect no state change since we need to see 2 precommits to progress.
+	rc, cm, to = algo.ReceiveMessage(cm)
 	assert.Nil(t, rc)
 	assert.Nil(t, to)
+	assert.Nil(t, cm)
 
-	expected = &ConsensusMessage{
-		MsgType: Prevote,
+	otherNodePrecommit := &ConsensusMessage{
+		Sender:  newNodeID(t),
+		MsgType: Precommit,
 		Height:  height,
 		Round:   round,
-		Value:   NilValue,
+		Value:   value,
 	}
-	assert.Equal(t, expected, cm)
+	require.NoError(t, s.AddMessage(otherNodePrecommit))
+
+	// Process the second precommit we expect to see a state change because we have seen 2 precommits.
+	rc, cm, to = algo.ReceiveMessage(otherNodePrecommit)
+	assert.Nil(t, to)
+	assert.Nil(t, cm)
+
+	expectedRoundChange := &RoundChange{
+		Round:    0,
+		Decision: proposal,
+	}
+
+	require.Equal(t, expectedRoundChange, rc)
 }
 
 type mockOracle struct {
