@@ -18,23 +18,23 @@ func NewBasicOracle(numValidators int, height uint64, store *Store) *BasicOracle
 	}
 }
 
-func (b *BasicOracle) FThresh(round int64) bool {
-	return b.store.CountAll(round) > b.numValidators/3
+func (b *BasicOracle) FThresh(round int) bool {
+	return b.store.CountFailures(round) > b.numValidators/3
 }
 
 func (b *BasicOracle) Height() uint64 {
 	return b.height
 }
 
-func (b *BasicOracle) MatchingProposal(round int64, valueHash *tendermint.Hash) *ConsensusMessage {
+func (b *BasicOracle) MatchingProposal(round int, valueHash *tendermint.Hash) *ConsensusMessage {
 	return b.store.MatchingProposal(round, *valueHash)
 }
 
-func (b *BasicOracle) PrecommitQThresh(round int64, valueHash *tendermint.Hash) bool {
+func (b *BasicOracle) PrecommitQThresh(round int, valueHash *tendermint.Hash) bool {
 	return b.store.CountPrecommits(round, valueHash) >= (b.numValidators*2/3)+1
 }
 
-func (b *BasicOracle) PrevoteQThresh(round int64, valueHash *tendermint.Hash) bool {
+func (b *BasicOracle) PrevoteQThresh(round int, valueHash *tendermint.Hash) bool {
 	return b.store.CountPrevotes(round, valueHash) >= (b.numValidators*2/3)+1
 }
 

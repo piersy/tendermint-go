@@ -1,59 +1,89 @@
 package algorithm
 
 import (
-	"bytes"
-	"crypto/sha256"
-	"encoding/gob"
+	"fmt"
 
 	"github.com/piersy/tendermint-go/tendermint"
 )
 
 type Store struct {
-	messages []*ConsensusMessage
-	hashes   map[tendermint.Hash]struct{}
-	valid    map[*tendermint.Hash]struct{}
+	// Messages is a map of arrays one per node, with the 0 element holding the
+	// prevote and the 1 element holding the precommit.
+	proposals  map[int]*ConsensusMessage
+	messages   map[int]map[NodeID][2]*ConsensusMessage
+	msgByHash  map[tendermint.Hash][]byte
+	validValue map[*tendermint.Hash]struct{}
 }
 
 func NewStore() *Store {
 	return &Store{
-		hashes: make(map[tendermint.Hash]struct{}),
-		valid:  make(map[*tendermint.Hash]struct{}),
+		proposals:  make(map[int]*ConsensusMessage),
+		messages:   make(map[int]map[NodeID][2]*ConsensusMessage),
+		msgByHash:  make(map[tendermint.Hash][]byte),
+		validValue: make(map[*tendermint.Hash]struct{}),
 	}
 }
 
 // AddMessage adds the given message to the store.
-func (s *Store) AddMessage(m *ConsensusMessage) error {
-	var b bytes.Buffer
-	err := gob.NewEncoder(&b).Encode(m)
-	if err != nil {
-		return err
+
+// Cases we need to check for any node sending a different message for a
+// position that they have already sent a message for. E.G. Proposer sending 2
+// differetn propose messages or any node sending 2 different prevote or
+// precommit messages.
+func (s *Store) AddMessage(m *ConsensusMessage, raw []byte, hash tendermint.Hash) error {
+	_, ok := s.msgByHash[hash]
+	if ok {
+		// We received duplicate message from network, ignore.
+		return nil
 	}
-	h := sha256.Sum256(b.Bytes())
-	_, ok := s.hashes[h]
-	if !ok {
-		s.hashes[h] = struct{}{}
-		s.messages = append(s.messages, m)
+
+	roundMsgs := s.messages[m.Round]
+	if roundMsgs == nil {
+		roundMsgs = make(map[NodeID][2]*ConsensusMessage)
+		s.messages[m.Round] = roundMsgs
 	}
+
+	msgs := roundMsgs[m.Sender]
+	switch m.MsgType {
+	case Propose:
+		if s.proposals[m.Round] != nil {
+			return fmt.Errorf("equivocation detected received %v & %v", s.proposals[m.Round], m)
+		}
+		s.proposals[m.Round] = m
+	case Prevote:
+		if msgs[0] != nil {
+			return fmt.Errorf("equivocation detected received %v & %v", msgs[0], m)
+		}
+		msgs[0] = m
+	case Precommit:
+		if msgs[1] != nil {
+			return fmt.Errorf("equivocation detected received %v & %v", msgs[1], m)
+		}
+		msgs[1] = m
+	}
+	roundMsgs[m.Sender] = msgs
+
+	// Store raw message by hash
+	s.msgByHash[hash] = raw
 	return nil
 }
 
 // SetValid sets the given value hash as valid.
 func (s *Store) SetValid(valueHash *tendermint.Hash) {
-	s.valid[valueHash] = struct{}{}
+	s.validValue[valueHash] = struct{}{}
 }
 
 // Valid checks the given value hash to see if it has been marked valid.
 func (s *Store) Valid(valueHash *tendermint.Hash) bool {
-	_, ok := s.valid[valueHash]
+	_, ok := s.validValue[valueHash]
 	return ok
 }
 
-// Returns a proposal for the given round and valueHash if it exists.
-func (s *Store) MatchingProposal(round int64, valueHash tendermint.Hash) *ConsensusMessage {
-	for _, v := range s.messages {
-		if v.MsgType == Propose && v.Round == round && v.Value == valueHash {
-			return v
-		}
+// Returns a proposal for the given round & valueHash or nil if none exists.
+func (s *Store) MatchingProposal(round int, valueHash tendermint.Hash) *ConsensusMessage {
+	proposal := s.proposals[round]
+	if proposal != nil && proposal.Value == valueHash {
+		return proposal
 	}
 	return nil
 }
@@ -61,10 +91,10 @@ func (s *Store) MatchingProposal(round int64, valueHash tendermint.Hash) *Consen
 // CountPrevotes returns true if a there is a quorum of prevotes for valueHash.
 // Passing nil as the valueHash acts as a wildcard and will cause all prevotes
 // for the round to be counted.
-func (s *Store) CountPrevotes(round int64, valueHash *tendermint.Hash) int {
+func (s *Store) CountPrevotes(round int, valueHash *tendermint.Hash) int {
 	result := 0
-	for _, v := range s.messages {
-		if v.MsgType == Prevote && v.Round == round && (valueHash == nil || v.Value == *valueHash) {
+	for _, msgs := range s.messages[round] {
+		if msgs[0] != nil && (valueHash == nil || msgs[0].Value == *valueHash) {
 			result++
 		}
 	}
@@ -74,21 +104,24 @@ func (s *Store) CountPrevotes(round int64, valueHash *tendermint.Hash) int {
 // CountPrecommits returns true if a there is a quorum of prevotes for
 // valueHash. Passing nil as the valueHash acts as a wildcard and will cause
 // all precommits for the round to be counted.
-func (s *Store) CountPrecommits(round int64, valueHash *tendermint.Hash) int {
+func (s *Store) CountPrecommits(round int, valueHash *tendermint.Hash) int {
 	result := 0
-	for _, v := range s.messages {
-		if v.MsgType == Precommit && v.Round == round && (valueHash == nil || v.Value == *valueHash) {
+	for _, msgs := range s.messages[round] {
+		if msgs[1] != nil && (valueHash == nil || msgs[1].Value == *valueHash) {
 			result++
 		}
 	}
 	return result
 }
 
-// CountAll counts the number of precommit and prevote messages for the given round.
-func (s *Store) CountAll(round int64) int {
+// CountAll counts the number of precommit and prevote messages for the given round voting for NilValue
+func (s *Store) CountFailures(round int) int {
 	result := 0
-	for _, v := range s.messages {
-		if (v.MsgType == Precommit || v.MsgType == Prevote) && v.Round == round && v.Value == NilValue {
+	for _, msgs := range s.messages[round] {
+		if msgs[0] != nil && msgs[0].Value == NilValue {
+			result++
+		}
+		if msgs[1] != nil && msgs[1].Value == NilValue {
 			result++
 		}
 	}

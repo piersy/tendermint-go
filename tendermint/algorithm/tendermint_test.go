@@ -3,7 +3,10 @@
 package algorithm
 
 import (
+	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/gob"
 	"testing"
 
 	"github.com/piersy/tendermint-go/tendermint"
@@ -26,7 +29,7 @@ func newValue(t *testing.T) tendermint.Hash {
 }
 
 func TestStartRound(t *testing.T) {
-	var round int64 = 0
+	var round int = 0
 	value := newValue(t)
 	numValidators := 2
 	nodeID := newNodeID(t)
@@ -136,7 +139,7 @@ func TestOnTimeout(t *testing.T) {
 func TestSuccessfulRun(t *testing.T) {
 	// proposer := newNodeID(t)
 	var height uint64 = 1
-	var round int64 = 0
+	var round int = 0
 	value := newValue(t)
 	nodeID := newNodeID(t)
 	numValidators := 2
@@ -145,7 +148,7 @@ func TestSuccessfulRun(t *testing.T) {
 	algo := New(nodeID, o)
 	proposal, to := algo.StartRound(value, round)
 	assert.Nil(t, to)
-	require.NoError(t, s.AddMessage(proposal))
+	require.NoError(t, s.AddMessage(proposal, nil, messageHash(t, proposal)))
 	s.SetValid(&proposal.Value)
 	// We haven't locked a round or a value, so we expect to prevote for the
 	// proposal.
@@ -161,7 +164,7 @@ func TestSuccessfulRun(t *testing.T) {
 		Value:   value,
 	}
 	assert.Equal(t, expected, cm)
-	require.NoError(t, s.AddMessage(cm))
+	require.NoError(t, s.AddMessage(cm, nil, messageHash(t, cm)))
 
 	// Process the prevote we expect no state change since we need to see 2 prevotes to progress.
 	rc, cm, to = algo.ReceiveMessage(cm)
@@ -176,7 +179,7 @@ func TestSuccessfulRun(t *testing.T) {
 		Round:   round,
 		Value:   value,
 	}
-	require.NoError(t, s.AddMessage(otherNodePrevote))
+	require.NoError(t, s.AddMessage(otherNodePrevote, nil, messageHash(t, otherNodePrevote)))
 
 	// Process another prevote, this should result in a precommit, since we have recieved 2 votes.
 	rc, cm, to = algo.ReceiveMessage(otherNodePrevote)
@@ -191,7 +194,7 @@ func TestSuccessfulRun(t *testing.T) {
 		Value:   value,
 	}
 	assert.Equal(t, expected, cm)
-	require.NoError(t, s.AddMessage(cm))
+	require.NoError(t, s.AddMessage(cm, nil, messageHash(t, cm)))
 
 	// Process the precommit we expect no state change since we need to see 2 precommits to progress.
 	rc, cm, to = algo.ReceiveMessage(cm)
@@ -206,7 +209,7 @@ func TestSuccessfulRun(t *testing.T) {
 		Round:   round,
 		Value:   value,
 	}
-	require.NoError(t, s.AddMessage(otherNodePrecommit))
+	require.NoError(t, s.AddMessage(otherNodePrecommit, nil, messageHash(t, otherNodePrecommit)))
 
 	// Process the second precommit we expect to see a state change because we have seen 2 precommits.
 	rc, cm, to = algo.ReceiveMessage(otherNodePrecommit)
@@ -221,12 +224,19 @@ func TestSuccessfulRun(t *testing.T) {
 	require.Equal(t, expectedRoundChange, rc)
 }
 
+func messageHash(t *testing.T, m *ConsensusMessage) [32]byte {
+	var b bytes.Buffer
+	err := gob.NewEncoder(&b).Encode(m)
+	require.NoError(t, err)
+	return sha256.Sum256(b.Bytes())
+}
+
 type mockOracle struct {
 	valid            func(v *tendermint.Hash) bool
-	matchingProposal func(round int64, value *tendermint.Hash) *ConsensusMessage
-	prevoteQThresh   func(round int64, value *tendermint.Hash) bool
-	precommitQThresh func(round int64, value *tendermint.Hash) bool
-	fThresh          func(round int64) bool
+	matchingProposal func(round int, value *tendermint.Hash) *ConsensusMessage
+	prevoteQThresh   func(round int, value *tendermint.Hash) bool
+	precommitQThresh func(round int, value *tendermint.Hash) bool
+	fThresh          func(round int) bool
 	height           uint64
 }
 
@@ -234,19 +244,19 @@ func (m *mockOracle) Valid(value *tendermint.Hash) bool {
 	return m.valid(value)
 }
 
-func (m *mockOracle) MatchingProposal(round int64, value *tendermint.Hash) *ConsensusMessage {
+func (m *mockOracle) MatchingProposal(round int, value *tendermint.Hash) *ConsensusMessage {
 	return m.matchingProposal(round, value)
 }
 
-func (m *mockOracle) PrevoteQThresh(round int64, value *tendermint.Hash) bool {
+func (m *mockOracle) PrevoteQThresh(round int, value *tendermint.Hash) bool {
 	return m.prevoteQThresh(round, value)
 }
 
-func (m *mockOracle) PrecommitQThresh(round int64, value *tendermint.Hash) bool {
+func (m *mockOracle) PrecommitQThresh(round int, value *tendermint.Hash) bool {
 	return m.precommitQThresh(round, value)
 }
 
-func (m *mockOracle) FThresh(round int64) bool {
+func (m *mockOracle) FThresh(round int) bool {
 	return m.fThresh(round)
 }
 

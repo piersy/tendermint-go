@@ -85,7 +85,7 @@ type Timeout struct {
 	timeoutType Step
 	Delay       uint
 	height      uint64
-	round       int64
+	round       int
 }
 
 // ConsensusMessage is returned to the caller to indicate that this message
@@ -94,9 +94,9 @@ type ConsensusMessage struct {
 	Sender     NodeID
 	MsgType    Step
 	Height     uint64
-	Round      int64
+	Round      int
 	Value      tendermint.Hash
-	ValidRound int64 // This field only has meaning for propose step. For prevote and precommit this value is ignored.
+	ValidRound int // This field only has meaning for propose step. For prevote and precommit this value is ignored.
 }
 
 func (cm *ConsensusMessage) String() string {
@@ -115,14 +115,14 @@ type Oracle interface {
 	// valid.
 	Valid(*tendermint.Hash) bool
 	// MatchingProposal returns a Proposal message with the given round and valueHash if it exists.
-	MatchingProposal(round int64, valueHash *tendermint.Hash) *ConsensusMessage
+	MatchingProposal(round int, valueHash *tendermint.Hash) *ConsensusMessage
 	// PrevoteQThresh returns true if a there is a quorum of prevotes for valueID.
-	PrevoteQThresh(round int64, valueHash *tendermint.Hash) bool
+	PrevoteQThresh(round int, valueHash *tendermint.Hash) bool
 	// PrevoteQThresh returns true if a there is a quorum of precommits for valueID.
-	PrecommitQThresh(round int64, valueHash *tendermint.Hash) bool
+	PrecommitQThresh(round int, valueHash *tendermint.Hash) bool
 	// FThresh indicates whether we have messages whose voting power exceeds
 	// the failure threshold for the given round.
-	FThresh(round int64) bool
+	FThresh(round int) bool
 	// Height returns the current height.
 	Height() uint64
 }
@@ -133,11 +133,11 @@ type Oracle interface {
 // message received from the network and drives subsequent state changes.
 type Algorithm struct {
 	nodeID         NodeID
-	round          int64
+	round          int
 	step           Step
-	lockedRound    int64
+	lockedRound    int
 	lockedValue    tendermint.Hash
-	validRound     int64
+	validRound     int
 	validValue     tendermint.Hash
 	line34Executed bool
 	line36Executed bool
@@ -194,7 +194,7 @@ func (a *Algorithm) timeout(timeoutType Step) *Timeout {
 // node is a proposer (indicated by a non nil proposalValue) it retures a
 // proposal ConsensusMessage to be broadcast, otherwise it returns a Timeout to
 // be scheduled.
-func (a *Algorithm) StartRound(proposalValue tendermint.Hash, round int64) (*ConsensusMessage, *Timeout) {
+func (a *Algorithm) StartRound(proposalValue tendermint.Hash, round int) (*ConsensusMessage, *Timeout) {
 	// println(a.nodeID.String(), height, "isproposer", a.oracle.Proposer(round, a.nodeID))
 
 	// sanity check
@@ -225,7 +225,7 @@ func (a *Algorithm) StartRound(proposalValue tendermint.Hash, round int64) (*Con
 // this indicates that a decision has been reached it will contain the proposal
 // that was decided upon, Decision can only be set when Round is 0.
 type RoundChange struct {
-	Round    int64
+	Round    int
 	Decision *ConsensusMessage
 }
 
